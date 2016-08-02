@@ -1,4 +1,8 @@
 const path = require('path');
+const fs = require('fs');
+const supportReactNative = !!process.env.REACT_NATIVE;
+const osENV = (process.env.REACT_NATIVE_ENV || '').toLowerCase();
+const dirContentsMap = {};
 
 function createFilesMap(state) {
     const result = {};
@@ -22,6 +26,43 @@ function toPosixPath(modulePath) {
     return modulePath.replace(/\\/g, '/');
 }
 
+function pathFix(os, base, fileList) {
+  let f;
+
+  // Check for mobile substitutions first
+  if (['mobile', 'ios', 'android', 'windows'].indexOf(osENV) > -1) {
+    // Check for a mobile file first
+    if (fileList.indexOf(f = (base + '.mobile.js')) > -1) {
+      return f;
+    }
+
+    // Check for OS specific file
+    if (fileList.indexOf(f = (base + '.' + os + '.js')) > -1) {
+      return f;
+    }
+
+    // Fallback on normal file (web/desktop) for passthrow files
+    return pathFix('desktop', base, fileList);
+  } else if (os == 'desktop') {
+    // Check for desktop only files
+    if (fileList.indexOf(f = base + '.desktop.js') > -1) {
+      return f;
+    }
+
+    // Fallback on non-named
+    return pathFix('', base, fileList);
+  } else {
+    // Web and suffixless files
+    if (fileList.indexOf(f = (base + '.web.js')) > -1) {
+      return f;
+    }
+
+    if (fileList.indexOf(f = (base + '.js')) > -1) {
+      return f;
+    }
+  }
+}
+
 export function mapToRelative(currentFile, module) {
     let from = path.dirname(currentFile);
     let to = path.normalize(module);
@@ -40,6 +81,24 @@ export function mapToRelative(currentFile, module) {
     }
 
     if (moduleMapped[0] !== '.') moduleMapped = `./${moduleMapped}`;
+
+    // Support React-Native specific require rewrites
+    if (supportReactNative) {
+      if (moduleMapped.toLowerCase().indexOf('autoimport:') > -1) {
+        let base = path.dirname(moduleMapped);
+
+        // Index files in destination directory once
+        if (!dirContentsMap[base]) {
+          dirContentsMap[base] = fs.readdirSync(base).map(v => v.toLowerCase());
+        }
+
+        // Fix mapped module path
+        moduleMapped = pathFix(
+          osENV, path.join(base, path.basename(module, 'js')),
+          dirContentsMap[base]
+        );
+      }
+    }
 
     return moduleMapped;
 }
