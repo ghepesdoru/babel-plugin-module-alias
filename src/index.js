@@ -1,7 +1,7 @@
 const path = require('path');
+
 const fs = require('fs');
-const supportReactNative = !!process.env.REACT_NATIVE;
-const osENV = (process.env.REACT_NATIVE_ENV || '').toLowerCase();
+
 const dirContentsMap = {};
 
 function createFilesMap(state) {
@@ -27,45 +27,48 @@ function toPosixPath(modulePath) {
 }
 
 function pathFix(os, base, fileList) {
-  let f;
+    // throw new Error(`${os} | ${base} | ${fileList}`);
+    // Check for mobile substitutions first
+    if (['mobile', 'ios', 'android', 'windows'].indexOf(os) > -1) {
+        // Check for a mobile file first
+        if (fileList.indexOf(`${base}.mobile.js`) > -1) {
+            return `${base}.mobile`;
+        }
 
-  // Check for mobile substitutions first
-  if (['mobile', 'ios', 'android', 'windows'].indexOf(osENV) > -1) {
-    // Check for a mobile file first
-    if (fileList.indexOf(f = (base + '.mobile.js')) > -1) {
-      return f;
+        // Check for OS specific file
+        if (fileList.indexOf(`${base}.${os}.js`) > -1) {
+            return `${base}.${os}`;
+        }
+
+        // Fallback on normal file (web/desktop) for passthrow files
+        return pathFix('desktop', base, fileList);
+    } else if (os === 'desktop') {
+        // Check for desktop only files
+        if (fileList.indexOf(`${base}.desktop.js`) > -1) {
+            return `${base}.desktop`;
+        }
+
+        // Fallback on web
+        return pathFix('web', base, fileList);
+    } else if (os === 'web') {
+      if (fileList.indexOf(`${base}.web.js`) > -1) {
+          return `${base}.web`;
+      }
     }
 
-    // Check for OS specific file
-    if (fileList.indexOf(f = (base + '.' + os + '.js')) > -1) {
-      return f;
+    // Suffixless files
+    if (fileList.indexOf(`${base}.js`) > -1) {
+        return `${base}`;
     }
 
-    // Fallback on normal file (web/desktop) for passthrow files
-    return pathFix('desktop', base, fileList);
-  } else if (os == 'desktop') {
-    // Check for desktop only files
-    if (fileList.indexOf(f = base + '.desktop.js') > -1) {
-      return f;
-    }
-
-    // Fallback on non-named
-    return pathFix('', base, fileList);
-  } else {
-    // Web and suffixless files
-    if (fileList.indexOf(f = (base + '.web.js')) > -1) {
-      return f;
-    }
-
-    if (fileList.indexOf(f = (base + '.js')) > -1) {
-      return f;
-    }
-  }
+    return base;
 }
 
-export function mapToRelative(currentFile, module) {
+export function mapToRelative(currentFile, module, supportReactNative, context) {
     let from = path.dirname(currentFile);
     let to = path.normalize(module);
+
+    const osENV = (process.env.REACT_NATIVE_ENV || '').toLowerCase();
 
     from = resolve(from);
     to = resolve(to);
@@ -83,27 +86,40 @@ export function mapToRelative(currentFile, module) {
     if (moduleMapped[0] !== '.') moduleMapped = `./${moduleMapped}`;
 
     // Support React-Native specific require rewrites
-    if (supportReactNative) {
-      if (moduleMapped.toLowerCase().indexOf('autoimport:') > -1) {
-        let base = path.dirname(moduleMapped);
+    if (process.env.REACT_NATIVE && supportReactNative) {
+        const base = path.dirname(moduleMapped);
 
         // Index files in destination directory once
         if (!dirContentsMap[base]) {
-          dirContentsMap[base] = fs.readdirSync(base).map(v => v.toLowerCase());
+            dirContentsMap[base] = fs.readdirSync(base).map(v => v.toLowerCase());
         }
 
         // Fix mapped module path
-        moduleMapped = pathFix(
-          osENV, path.join(base, path.basename(module, 'js')),
-          dirContentsMap[base]
+        const newFile = pathFix(
+            osENV, path.basename(moduleMapped, 'js'),
+            dirContentsMap[base]
         );
-      }
+
+        return `${base}/${newFile}`;
     }
+    // }
 
     return moduleMapped;
 }
 
 export function mapModule(source, file, filesMap) {
+    let supportReactNative = false;
+
+    // Allow React-Native automatic file detection when applies
+    if (process.env.REACT_NATIVE) {
+      let aux = source.toLowerCase().indexOf('autoimport:');
+
+      if (aux > -1) {
+        source = source.slice(supportReactNative + 11);
+        supportReactNative = true;
+      }
+    }
+
     const moduleSplit = source.split('/');
 
     let src;
@@ -122,7 +138,7 @@ export function mapModule(source, file, filesMap) {
     }
 
     const newPath = source.replace(moduleSplit.join('/'), src);
-    return mapToRelative(file, newPath);
+    return mapToRelative(file, newPath, supportReactNative);
 }
 
 

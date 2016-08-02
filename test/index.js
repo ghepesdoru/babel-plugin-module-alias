@@ -16,6 +16,9 @@ describe('Babel plugin module alias', () => {
             }, {
                 src: 'npm:concrete',
                 expose: 'abstract'
+            }, {
+                src: './test/mock',
+                expose: 'mock'
             }]]
         ]
     };
@@ -163,6 +166,81 @@ describe('Babel plugin module alias', () => {
             const result = transform(code, transformerOpts);
 
             assert.strictEqual(result.code, 'import concrete from "concrete/thing";');
+        });
+    });
+
+    describe('should support remapping to fit React integration', () => {
+        describe('with a require statement', () => {
+            const code = 'var concrete = require("autoimport:mock/test")';
+            let result;
+
+            process.env.REACT_NATIVE = true;
+
+            it('Suffixless - test.js', () => {
+                process.env.REACT_NATIVE_ENV = '';
+                result = transform(code, transformerOpts);
+                assert.strictEqual(result.code, 'var concrete = require("./test/mock/test");');
+            });
+
+            it('Mobile - test.mobile.js', () => {
+                process.env.REACT_NATIVE_ENV = 'mobile';
+                result = transform(code, transformerOpts);
+                assert.strictEqual(result.code, 'var concrete = require("./test/mock/test.mobile");');
+            });
+
+            it('IOS missed due to mobile - test.mobile.js', () => {
+                process.env.REACT_NATIVE_ENV = 'ios';
+                result = transform(code, transformerOpts);
+                assert.strictEqual(result.code, 'var concrete = require("./test/mock/test.mobile");');
+            });
+
+            it('Android missed due to mobile - test.mobile.js', () => {
+                process.env.REACT_NATIVE_ENV = 'android';
+                result = transform(code, transformerOpts);
+                assert.strictEqual(result.code, 'var concrete = require("./test/mock/test.mobile");');
+            });
+
+            it('Windows missed due to mobile - test.mobile.js', () => {
+                process.env.REACT_NATIVE_ENV = 'windows';
+                result = transform(code, transformerOpts);
+                assert.strictEqual(result.code, 'var concrete = require("./test/mock/test.mobile");');
+            });
+
+            it('IOS targeted - test.ios.js', () => {
+                process.env.REACT_NATIVE_ENV = 'ios';
+                result = transform('var concrete = require("autoimport:mock/test.ios")', transformerOpts);
+                assert.strictEqual(result.code, 'var concrete = require("./test/mock/test.ios");');
+            });
+
+            it('Android targeted - test.android.js', () => {
+                process.env.REACT_NATIVE_ENV = 'android';
+                result = transform('var concrete = require("autoimport:mock/test.android")', transformerOpts);
+                assert.strictEqual(result.code, 'var concrete = require("./test/mock/test.android");');
+            });
+
+            it('Windows targeted - test.windows.js', () => {
+                process.env.REACT_NATIVE_ENV = 'windows';
+                result = transform('var concrete = require("autoimport:mock/test.windows")', transformerOpts);
+                assert.strictEqual(result.code, 'var concrete = require("./test/mock/test.windows");');
+            });
+
+            it ('Desktop targeted - test.desktop.js', () => {
+              process.env.REACT_NATIVE_ENV = 'desktop';
+              result = transform('var concrete = require("autoimport:mock/test.desktop")', transformerOpts);
+              assert.strictEqual(result.code, 'var concrete = require("./test/mock/test.desktop");');
+            });
+
+            it('Web targeted - test.web.js', () => {
+              process.env.REACT_NATIVE_ENV = 'web';
+              result = transform('var concrete = require("autoimport:mock/test.web")', transformerOpts);
+              assert.strictEqual(result.code, 'var concrete = require("./test/mock/test.web");');
+            });
+
+            it('Falling throw all cases to suffixless from IOS - fallback.js', () => {
+              process.env.REACT_NATIVE_ENV = 'ios';
+              result = transform('var concrete = require("autoimport:mock/fallback")', transformerOpts);
+              assert.strictEqual(result.code, 'var concrete = require("./test/mock/fallback");');
+            });
         });
     });
 });
