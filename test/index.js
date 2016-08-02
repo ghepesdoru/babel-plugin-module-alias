@@ -242,5 +242,78 @@ describe('Babel plugin module alias', () => {
               assert.strictEqual(result.code, 'var concrete = require("./test/mock/fallback");');
             });
         });
+
+        describe('with an import statement', () => {
+            const code = 'import { concrete } from "autoimport:mock/test"';
+            let result;
+
+            process.env.REACT_NATIVE = true;
+
+            it('Suffixless - test.js', () => {
+                process.env.REACT_NATIVE_ENV = '';
+                result = transform(code, transformerOpts);
+                assert.strictEqual(result.code, 'import { concrete } from "./test/mock/test";');
+            });
+
+            it('Mobile - test.mobile.js', () => {
+                process.env.REACT_NATIVE_ENV = 'mobile';
+                result = transform(code, transformerOpts);
+                assert.strictEqual(result.code, 'import { concrete } from "./test/mock/test.mobile";');
+            });
+
+            it('IOS missed due to mobile - test.mobile.js', () => {
+                process.env.REACT_NATIVE_ENV = 'ios';
+                result = transform(code, transformerOpts);
+                assert.strictEqual(result.code, 'import { concrete } from "./test/mock/test.mobile";');
+            });
+
+            it('Android missed due to mobile - test.mobile.js', () => {
+                process.env.REACT_NATIVE_ENV = 'android';
+                result = transform(code, transformerOpts);
+                assert.strictEqual(result.code, 'import { concrete } from "./test/mock/test.mobile";');
+            });
+
+            it('Windows missed due to mobile - test.mobile.js', () => {
+                process.env.REACT_NATIVE_ENV = 'windows';
+                result = transform(code, transformerOpts);
+                assert.strictEqual(result.code, 'import { concrete } from "./test/mock/test.mobile";');
+            });
+
+            it('IOS targeted - test.ios.js', () => {
+                process.env.REACT_NATIVE_ENV = 'ios';
+                result = transform('import { concrete } from "autoimport:mock/test.ios";', transformerOpts);
+                assert.strictEqual(result.code, 'import { concrete } from "./test/mock/test.ios";');
+            });
+
+            it('Android targeted - test.android.js', () => {
+                process.env.REACT_NATIVE_ENV = 'android';
+                result = transform('import { concrete } from "autoimport:mock/test.android";', transformerOpts);
+                assert.strictEqual(result.code, 'import { concrete } from "./test/mock/test.android";');
+            });
+
+            it('Windows targeted - test.windows.js', () => {
+                process.env.REACT_NATIVE_ENV = 'windows';
+                result = transform('import { concrete } from "autoimport:mock/test.windows";', transformerOpts);
+                assert.strictEqual(result.code, 'import { concrete } from "./test/mock/test.windows";');
+            });
+
+            it ('Desktop targeted - test.desktop.js', () => {
+              process.env.REACT_NATIVE_ENV = 'desktop';
+              result = transform('import { concrete } from "autoimport:mock/test.desktop";', transformerOpts);
+              assert.strictEqual(result.code, 'import { concrete } from "./test/mock/test.desktop";');
+            });
+
+            it('Web targeted - test.web.js', () => {
+              process.env.REACT_NATIVE_ENV = 'web';
+              result = transform('import { concrete } from "autoimport:mock/test.web";', transformerOpts);
+              assert.strictEqual(result.code, 'import { concrete } from "./test/mock/test.web";');
+            });
+
+            it('Falling throw all cases to suffixless from IOS - fallback.js', () => {
+              process.env.REACT_NATIVE_ENV = 'ios';
+              result = transform('import { concrete } from "autoimport:mock/fallback";', transformerOpts);
+              assert.strictEqual(result.code, 'import { concrete } from "./test/mock/fallback";');
+            });
+        });
     });
 });
